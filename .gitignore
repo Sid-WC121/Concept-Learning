@@ -6,6 +6,7 @@ cem/wandb
 src/__pycache__/*
 logs/
 *.pyc
+__pycache__/
 results/*
 scripts/Figures/
 !results/
@@ -15,12 +16,16 @@ scripts/Figures/
 dataset/*/images
 dataset/models/
 dataset/images
+dataset/colored_mnist/
 !dataset/*/preprocessed
+dataset/dsprites/
 runs
 build
-models/
+/models/
 intermediary/
 results/bases
 results/evaluation
 cem/results/
 cem/cem_concepts/
+dataset/
+lightning_logs/

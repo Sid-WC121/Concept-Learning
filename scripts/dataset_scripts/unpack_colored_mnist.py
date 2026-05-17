@@ -1,7 +1,8 @@
 import numpy as np
 from PIL import Image
 import pickle 
-import random
+
+from src.paths import DATASET_ROOT, ensure_dir, ensure_parent
 
 def write_image_from_numpy_array(arr,location):
     """Turn a mxnx3 numpy array into a png image, stored at location
@@ -16,6 +17,7 @@ def write_image_from_numpy_array(arr,location):
     """
     
     im = Image.fromarray(arr)
+    ensure_parent(location)
     im.save(location)
     
 def load_mnist_dictionary():
@@ -33,7 +35,11 @@ def load_mnist_dictionary():
             Used to see if the model picks up on spurrious correlations 
     """
     
-    return np.load(open("colored_mnist/mnist_10color_jitter_var_0.030.npy","rb"),allow_pickle=True,encoding='latin1').item()
+    return np.load(
+        open(DATASET_ROOT / "colored_mnist" / "mnist_10color_jitter_var_0.030.npy", "rb"),
+        allow_pickle=True,
+        encoding="latin1",
+    ).item()
 
 def create_dataset(write_images=True):
     """Creates the dataset by writing images to files and the train.pkl dictionary, with information on 
@@ -62,7 +68,7 @@ def create_dataset(write_images=True):
             label = mnist_dictionary[label_key][i]
 
             image_number = i 
-            if split == 'valid':
+            if split == 'test':
                 image_number += len(mnist_dictionary['train_image'])
 
             storage_location = "colored_mnist/images/{}/{}.png".format(label,image_number)
@@ -85,9 +91,6 @@ def create_dataset(write_images=True):
                 attribute_label.append(value)
                 attribute_label.append(value)
             
-            info_dictionary['spurious'] = random.randint(0,1)
-            attribute_label.append(info_dictionary['spurious'])
-            
             info_dictionary['attribute_label'] = attribute_label
             
             if split == 'train':
@@ -96,10 +99,12 @@ def create_dataset(write_images=True):
                 valid_dictionary.append(info_dictionary)
             
             if write_images:
-                write_image_from_numpy_array(image,storage_location)
+                write_image_from_numpy_array(image, DATASET_ROOT / storage_location)
         
-    pickle.dump(train_dictionary,open("colored_mnist/images/train.pkl","wb"))
-    pickle.dump(valid_dictionary,open("colored_mnist/images/val.pkl","wb"))
+    preprocessed_dir = ensure_dir(DATASET_ROOT / "colored_mnist" / "preprocessed")
+    pickle.dump(train_dictionary, open(preprocessed_dir / "train.pkl", "wb"))
+    pickle.dump(valid_dictionary, open(preprocessed_dir / "val.pkl", "wb"))
+    pickle.dump(valid_dictionary, open(preprocessed_dir / "test.pkl", "wb"))
     
 if __name__ == "__main__":
     create_dataset(write_images = False)

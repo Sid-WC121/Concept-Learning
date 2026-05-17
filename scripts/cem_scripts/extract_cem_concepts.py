@@ -11,6 +11,7 @@ from torch.utils.data import TensorDataset, DataLoader
 from cem.data.CUB200.cub_loader import load_data, find_class_imbalance
 import numpy as np
 import argparse
+import json
 import random
 import os
 import cem.train.training as cem_train
@@ -228,15 +229,70 @@ def generate_data_loaders_mnist(suffix):
     
     return train_dl, valid_dl, test_dl
 
+def generate_data_loaders_dsprites(suffix):
+    """Generate dSprites train, validation, and test dataloaders."""
+
+    if suffix in ["_model_robustness","_model_responsiveness"]:
+        suffix = ""
+
+    dsprites_location = DATASET_ROOT / "dsprites{}".format(suffix)
+    train_data_path = str(dsprites_location / "preprocessed" / "train.pkl")
+    valid_data_path = str(dsprites_location / "preprocessed" / "val.pkl")
+    test_data_path = str(dsprites_location / "preprocessed" / "test.pkl")
+
+    train_dl = load_data(
+        pkl_paths=[train_data_path],
+        use_attr=True,
+        no_img=False,
+        batch_size=64,
+        uncertain_label=False,
+        n_class_attr=2,
+        image_dir=str(dsprites_location / "images"),
+        resampling=False,
+        root_dir=str(DATASET_ROOT),
+        num_workers=num_workers,
+        path_transform=None
+    )
+
+    valid_dl = load_data(
+        pkl_paths=[valid_data_path],
+        use_attr=True,
+        no_img=False,
+        batch_size=64,
+        uncertain_label=False,
+        n_class_attr=2,
+        image_dir=str(dsprites_location / "images"),
+        resampling=False,
+        root_dir=str(DATASET_ROOT),
+        num_workers=num_workers,
+        path_transform=None
+    )
+
+    test_dl = load_data(
+        pkl_paths=[test_data_path],
+        use_attr=True,
+        no_img=False,
+        batch_size=64,
+        uncertain_label=False,
+        n_class_attr=2,
+        image_dir=str(dsprites_location / "images"),
+        resampling=False,
+        root_dir=str(DATASET_ROOT),
+        num_workers=num_workers,
+        path_transform=None
+    )
+
+    return train_dl, valid_dl, test_dl
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generate CEM Concept Vectors')
     parser.add_argument('--experiment_name', type=str,
-                        help='Name of the experiment we plan to run. Valid names include mnist, cub, and xor' )
+                        help='Name of the experiment we plan to run. Valid names include mnist, cub, dsprites, and xor' )
     parser.add_argument('--num_gpus',type=int,
                         help='Number of GPUs to use when training',
                         default=0)
-    parser.add_argument('--num_epochs',type=int,default=1,help='How many epochs to train for')
-    parser.add_argument('--validation_epochs',type=int,default=1,help='How often should we run the validation script')
+    parser.add_argument('--num_epochs',type=int,default=50,help='How many epochs to train for')
+    parser.add_argument('--validation_epochs',type=int,default=25,help='How often should we run the validation script')
     parser.add_argument('--seed',type=int,default=42,help='Random seed for training')
     parser.add_argument('--num_workers',type=int,default=8,help='Number of workers')
     parser.add_argument('--sample_train',type=float,default=1.0,help='Fraction of the train dataset to sample')
@@ -252,6 +308,7 @@ if __name__ == "__main__":
     validation_epochs = args.validation_epochs
     seed = args.seed
     num_workers = args.num_workers
+    os.environ["CEM_CONCEPT_ROOT"] = str(RESULTS_ROOT / "bases" / "cem")
 
     pl.seed_everything(args.seed, workers=True)
 
@@ -283,8 +340,12 @@ if __name__ == "__main__":
         n_tasks = 200
     elif experiment_name == "mnist":
         train_dl, valid_dl, test_dl = generate_data_loaders_mnist(suffix)
-        n_concepts = 10 + 10 + 1
+        n_concepts = 10 + 10
         n_tasks = 10
+    elif experiment_name == "dsprites":
+        train_dl, valid_dl, test_dl = generate_data_loaders_dsprites(suffix)
+        n_concepts = 18
+        n_tasks = 100
     else:
         print("{} is not a valid experiment name".format(experiment_name))
 
@@ -322,12 +383,16 @@ if __name__ == "__main__":
         train_data_path = str(cub_location / "preprocessed" / "train.pkl")
         imbalance = find_class_imbalance(train_data_path, True)
     elif experiment_name == 'mnist':
-        extractor_arch = resnet50
+        extractor_arch = "resnet34"
+        imbalance = None
+    elif experiment_name == 'dsprites':
+        extractor_arch = "resnet34"
         imbalance = None
         
     config = dict(
         cv=5,
         max_epochs=num_epochs,
+        check_val_every_n_epoch=validation_epochs,
         patience=15,
         batch_size=128,
         num_workers=num_workers,
@@ -355,10 +420,12 @@ if __name__ == "__main__":
         concat_prob=False,
         seed=seed,
         concept_pair_loss_weight = args.concept_pair_loss_weight,
-        existing_weights=""
+        existing_weights="",
+        experiment_name=experiment_name + suffix,
     )
     config["architecture"] = "ConceptEmbeddingModel"
-    config["extra_name"] = f"New"
+    sample_tag = f"{args.sample_train:g}_{args.sample_valid:g}_{args.sample_test:g}".replace(".", "p")
+    config["extra_name"] = f"New_seed_{seed}_epochs_{num_epochs}_sample_{sample_tag}"
     config["shared_prob_gen"] = True
     config["sigmoidal_prob"] = True
     config["sigmoidal_embedding"] = False
@@ -378,11 +445,28 @@ if __name__ == "__main__":
         result_dir=str(RESULTS_ROOT),
         rerun=False,
         project_name='',
-        seed=42,
+        seed=seed,
         activation_freq=0,
         single_frequency_epochs=0,
         imbalance=imbalance,
     )
+
+    manifest_dir = RESULTS_ROOT / "bases" / "cem" / (experiment_name + suffix) / str(seed)
+    manifest_dir.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "experiment_name": experiment_name + suffix,
+        "seed": seed,
+        "num_epochs": num_epochs,
+        "validation_epochs": validation_epochs,
+        "sample_train": args.sample_train,
+        "sample_valid": args.sample_valid,
+        "sample_test": args.sample_test,
+        "concept_pair_loss_weight": args.concept_pair_loss_weight,
+        "c_extractor_arch": extractor_arch,
+        "n_concepts": n_concepts,
+        "n_tasks": n_tasks,
+    }
+    (manifest_dir / "manifest.json").write_text(json.dumps(manifest, indent=2))
     
 #     cem_model = cem_train.construct_model(
 #         n_concepts=n_concepts,

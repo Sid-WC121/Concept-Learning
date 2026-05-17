@@ -637,9 +637,12 @@ def write_dataset(orientations,npz_file, write_images=False):
         pickle.dump(pkl_file_info,w)
         w.close()
         
-def write_ten_dsprites():
+def write_ten_dsprites(seed=17):
     npz_file = np.load(open(dataset_folder+"/dsprites/dsprites_ndarray_co1sh3sc6or40x32y32_64x64.npz","rb"))
+    random_state = random.getstate()
+    random.seed(seed)
     orientations = generate_random_orientation(10)
+    random.setstate(random_state)
     write_dataset(orientations,npz_file, write_images=True)
 
         

@@ -17,8 +17,7 @@ def get_top_k_pairs(embedding,k=3):
     pairs = []
     
     for i,row in enumerate(embedding):
-        top_k = np.argpartition(row, k+1)[:k+1]
-        top_k = [j for j in top_k if j != i]
+        top_k = [j for j in np.argsort(row, kind="stable") if j != i][:k]
         
         assert len(top_k) == k
         

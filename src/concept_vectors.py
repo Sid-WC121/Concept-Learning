@@ -319,7 +319,8 @@ def load_tcav_vectors_simple(attribute,dataset,suffix,seed=-1):
         rand_vector = load_tcav_vectors_simple("is_scale_0.8",dataset,suffix,seed)
         return rand_vector * np.random.random(rand_vector.shape)
 
-    return load_tcav_vectors(attribute,['block4_conv1'],experiment_name=dataset.experiment_name+suffix,seed=seed,suffix=suffix)[0]
+    bottlenecks = ["mixed4c"] if dataset.experiment_name == "mnist" else ["block4_conv1"]
+    return load_tcav_vectors(attribute,bottlenecks,experiment_name=dataset.experiment_name+suffix,seed=seed,suffix=suffix)[0]
 
 def create_vector_from_label(attribute_name,dataset,suffix,seed=-1):
     """Generate sparse concept vectors, by looking at whether a concept is present in a data point

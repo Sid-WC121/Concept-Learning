@@ -18,196 +18,263 @@ We provide code here to perform the following operations:
 
 We provide the bulk of the code in this repository. However, to run concept interventions, we provide information in the scripts/cem_scripts folder. 
 
-## Installation and Datasets
-### Installation
-The provided `environment.yaml` is a Linux conda environment. It is intended for a Linux machine/container, such as a Modal shell. It will not solve on native Windows because many pinned packages are Linux builds.
+## Reproduction Runbook
 
-Create the environment on Linux:
-```bash
+Run all commands from the repository root.
+
+### 1. Create Environment
+
+Windows:
+```powershell
 conda env create -f environment.yaml
 conda activate concepts
-pip install -e .
 ```
 
-Run dataset setup scripts from the repository root:
+Linux/Modal:
 ```bash
+conda env create -f environment-linux.yaml
+conda activate concepts
+```
+
+Check GPU visibility:
+```powershell
+python -c "import torch, tensorflow as tf; print('torch', torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else None); print('tf', tf.config.list_physical_devices('GPU'))"
+```
+
+If TensorFlow prints missing `cudart64_110.dll`, `cublas64_11.dll`, or `cudnn64_8.dll`, TCAV will run on CPU. PyTorch/CEM can still use GPU. For exact full runs, Linux/Modal GPU is preferred.
+
+Optional path overrides:
+```powershell
+$env:CONCEPT_DATASET_DIR="$PWD\dataset"
+$env:CONCEPT_RESULTS_DIR="$PWD\results"
+```
+
+### 2. Download Frozen Models
+
+```powershell
+python scripts/dataset_scripts/download_models.py
+```
+
+This creates:
+```text
+dataset/models/inception5h/tensorflow_inception_graph.pb
+dataset/models/inception5h/imagenet_comp_graph_label_strings.txt
+dataset/models/mobilenet_v2_1.0_224/*
+```
+
+`dataset/models/` contains neural network weights. `dataset/imagenet/` contains TCAV image folders such as `random500_0` and `zebra`.
+
+### 3. Download And Prepare Datasets
+
+```powershell
 python scripts/dataset_scripts/download_mnist.py
 python scripts/dataset_scripts/download_dsprites.py
 python scripts/dataset_scripts/download_cub.py
 ```
 
-Optional path overrides:
-```bash
-export CONCEPT_DATASET_DIR="$PWD/dataset"
-export CONCEPT_RESULTS_DIR="$PWD/results"
+Expected prepared files:
+```text
+dataset/colored_mnist/preprocessed/train.pkl
+dataset/colored_mnist/preprocessed/val.pkl
+dataset/dsprites/preprocessed/train.pkl
+dataset/dsprites/preprocessed/val.pkl
+dataset/dsprites/preprocessed/test.pkl
+dataset/CUB/preprocessed/train.pkl
+dataset/CUB/preprocessed/val.pkl
+dataset/CUB/preprocessed/test.pkl
+dataset/CUB/metadata/attributes.txt
+dataset/CUB/metadata/classes.txt
 ```
 
-### Datasets
-We use four datasets for the project: CUB, CheXpert, DSprites, and colored MNIST:
-
-1. <b>Colored MNIST:</b> We download the Colored MNIST dataset from <a href="https://drive.google.com/u/0/uc?id=1NSv4RCSHjcHois3dXjYw_PaLIoVlLgXu&export=download">here</a>, and use the ```mnist_10color_jitter_var_0.030.npy``` variant.
-2. <b>CUB:</b> We download the CUB dataset from <a href="https://www.vision.caltech.edu/datasets/cub_200_2011/">here</a>. 
-3. <b>DSprites:</b> We develop DSprites from .npz files in the DSprites directory; to create the dataset, run the following: 
-    ```python
-
-    from src.dataset import write_ten_dsprites
-    write_ten_dsprites()
-    ```
-4. <b>CheXpert:</b> We use the small variant of CheXpert from <a href="https://www.kaggle.com/datasets/ashery/chexpert">here</a>
-
-Install each to the dataset/images folder; for examples on what image paths should look like, use the preprocessed/train.py file. 
-
-## Constructing Concept Bases
-We give instructions on how to develop each of the following concept vectors: Label,Concept2Vec,TCAV, and detail CEM later
-1. <b>Label:</b> To construct label vectors, simply run the following function
-    ```python
-    from src.concept_vectors import load_label_vectors_simple 
-    from src.dataset import CUB_Dataset
-    attribute = "has_bill_shape::dagger"
-    suffix = ""
-    seed = 43
-    dataset = CUB_Dataset()
-    
-    load_label_vectors_simple(attribute,dataset,suffix,seed=seed)
-    ```
-    where suffix is either "", "_image_robustness", or "_image_responsiveness". Dataset is an object from the Dataset class in `dataset.py`, and attribute is a string representing a concept. 
-
-2. <b>Concept2Vec:</b> We run the following function to create concept2vec vectors:
-    ```python
-    from src.concept_vectors import load_concept2vec_vectors_simple
-    from src.dataset import CUB_Dataset
-    from src.create_vectors import create_concept2vec
-    
-    attribute = "has_bill_shape::dagger"
-    suffix = ""
-    seed = 43
-    dataset = CUB_Dataset()
-    create_concept2vec(dataset,suffix,seed=seed,
-                                 embedding_size=32,num_epochs=5,dataset_size=1000,initial_embedding=None)    
-    load_concept2vec_vectors_simple(attribute,dataset,suffix,seed=seed)
-    ```
-3. <b>TCAV:</b> We run the following code to create TCAV vectors
-    ```python
-    from src.concept_vectors import load_tcav_vectors_simple
-    from src.dataset import CUB_Dataset
-    from src.create_vectors import  create_tcav_dataset
-    
-    attribute = "has_bill_shape::dagger"
-    suffix = ""
-    seed = 43
-    dataset = CUB_Dataset()
-    create_tcav_dataset(attribute,dataset,
-                                    10,50,
-                                    seed=seed,suffix=suffix)
-    load_tcav_vectors_simple(attribute,dataset,suffix,seed=seed)
-    ```
-
-    
-Once the vectors are created, the created concept basis can be visualized as follows: 
-```python
-from src.dataset import CUB_Dataset
-from src.hierarchy import create_ward_hierarchy, create_hierarchy
-from src.concept_vectors import load_shapley_vectors_simple
-dataset = CUB_Dataset()
-attributes = dataset.get_attributes()
-
-hierarchy = create_hierarchy(create_ward_hierarchy,load_shapley_vectors_simple,dataset,'',attributes,43)
-print(hierarchy)
-```
-Output:
-```
-          ---- has_upper_tail_color::buff
-     ----|
-          ---- has_under_tail_color::buff
-
-----|
-           ---- has_upperparts_color::buff
-      ----|
-                ---- has_wing_color::buff
-           ----|
-                ---- has_back_color::buff
+Verify:
+```powershell
+python -c "from src.dataset import MNIST_Dataset, DSprites_Dataset, CUB_Dataset; m=MNIST_Dataset(); d=DSprites_Dataset(); c=CUB_Dataset(); print('MNIST', len(m.get_data()), len(m.get_attributes())); print('dSprites', len(d.get_data()), len(d.get_attributes())); print('CUB', len(c.get_data()), len(c.get_data(train=False)), len(c.get_attributes()), len(c.class_names))"
 ```
 
-
-## Evaluating Concept Bases
-After creating concept vectors, we evaluate them in the `scripts/Evaluate Hierarchies.ipynb`
-1. Develop the robustness and responsiveness dataset
-    ```python
-    from src.dataset import CUB_Dataset
-    
-    dataset = CUB_Dataset()
-    dataset.create_robustness()
-    dataset.create_responsiveness()
-    ```
-2. Train the required vectors, including one additional reference model for faithfulness
-    ```python
-    from src.concept_vectors import load_concept2vec_vectors_simple
-    from src.dataset import CUB_Dataset
-    from src.create_vectors import create_concept2vec
-    
-    for suffix in ["","_image_robustness","_image_responsiveness"]:
-        for seed in [43,44,45]:
-        create_concept2vec(dataset,suffix,seed=seed,
-                                     embedding_size=32,num_epochs=5,dataset_size=1000,initial_embedding=None)    
-    create_concept2vec(dataset,"",seed=42,embedding_size=32,num_epochs=5,dataset_size=1000,initial_embedding=None
-    ```
-3. Evaluate the vectors (code from `scripts/Evaluate Hierarchies.ipynb`
-    ```python
-    from src.dataset import CUB_Dataset
-    from src.metrics import compute_all_metrics
-    from src.concept_vectors import load_concept2vec_vectors_simple
-    dataset = CUB_Dataset()
-    attributes = dataset.get_attributes()
-    method = load_concept2vec_vectors_simple
-    seeds = [43,44,45]
-    
-    results = compute_all_metrics(method,
-                                        dataset,
-                                        attributes,
-                                        seeds)
-    ```
-
-
-
-## Concept Intervention and Training CEM Vectors
-We use the Concept Embedding Model (CEM) to test for intervention with concept bases. The CEM model has its own dependencies, and instructions for setting it up is available <a href="https://github.com/mateoespinosa/cem/tree/main">here</a>. We modify certain files to account for concept hierarchy-specific functionality, place those files in `scripts/cem_scripts`, and store a working directory with all those files in the `cem` folder
-
-### Training CEM Vectors
-To train CEM vectors, we run the following: 
-```bash
-
-$ python experiments/extract_cem_concepts.py --experiment_name $experiment_name --num_gpus $num_gpus --num_epochs 50 --validation_epochs 25 --seed $seed --concept_pair_loss_weight 0
-```
-In this, `experiment_name` is one of mnist, cub, dsprites, or chexpert, `num_gpus` is the number of GPUs available, and `seed` is the random seed. The resulting vectors are stored at `cem_concepts` folder. 
-
-### Concept Intervention
-We perform concept intervention using concept bases in the `scripts/cem_scripts/CEM Intervention Experiments.ipynb` file. This requires a previously trained CEM model; instructions for this are in the <a href="https://github.com/mateoespinosa/cem/tree/main">CEM repository</a>. We additionally provide a pre-trained CEM model, with CUB, which we use for our intervention experiments <a href="https://drive.google.com/file/d/1ILQkLwDw88bYRV7PnTnQZBcwASk0uA0m/view?usp=sharing">here</a> with the config file <a href="https://drive.google.com/file/d/1rJDESQTqIorr_LANijN0QPAUuSl0gd0n/view?usp=sharing">here</a>. To use these, run the following: 
-```python
-config = joblib.load("models/ConceptEmbeddingModel_resnet34_fold_1_experiment_config.joblib")
-if config['weight_loss']:
-    imbalance = find_class_imbalance(train_data_path, True)
-else:
-    imbalance = None
-model = intervention_utils.load_trained_model(
-            config=config,
-            n_tasks=n_tasks,
-            n_concepts=n_concepts,
-            result_dir="models/",
-            split=0,
-            imbalance=imbalance,
-            intervention_idxs=intervention_idxs,
-            train_dl=sample_train_dl,
-            sequential=False,
-            independent=False,
-        )
+Current expected counts:
+```text
+MNIST train 60000, attributes 20
+dSprites train 2500, attributes 18
+CUB train 4796, val 1198, attributes 312, classes 200
 ```
 
-Additionally, this requires concept vectors in the `concept_vectors` folder, which we generate byrunning the following: 
-```python
-from src.util import save_concept_vectors
-from src.dataset import CUB_Dataset
-from src.concept_vectors import load_shapley_vectors_simple
-save_concept_vectors(load_shapley_vectors_simple,CUB_Dataset(),43,"shapley_43")
+CheXpert is not auto-downloaded. Use the small CheXpert dataset from Kaggle and arrange it as `dataset/chexpert/images` plus `dataset/chexpert/preprocessed`.
+
+### 4. Run MNIST And dSprites Pipelines
+
+Exact paper-style defaults:
+```powershell
+python scripts/run_mnist_pipeline.py --dataset mnist
+python scripts/run_mnist_pipeline.py --dataset dsprites
 ```
-This saves a file called `results/concept_vectors/shapley_43.npy`, which can be used with the `CEM Intervention Experiments.ipynb` notebook. This notebook details how to perform hierarchical interventions with a variety of hierarchies.  
+
+This trains/loads:
+```text
+Label
+Concept2Vec
+TCAV
+CEM
+```
+
+Seeds:
+```text
+43, 44, 45
+```
+
+CEM defaults:
+```text
+50 epochs
+validation every 25 epochs
+ResNet34 extractor
+concept_pair_loss_weight=0
+```
+
+Evaluate only after vectors already exist:
+```powershell
+python scripts/run_mnist_pipeline.py --dataset mnist --eval-only
+python scripts/run_mnist_pipeline.py --dataset dsprites --eval-only
+```
+
+### 5. Run CUB Basis Generation
+
+CUB dataset prep is done by:
+```powershell
+python scripts/dataset_scripts/download_cub.py
+```
+
+Create Concept2Vec for CUB:
+```powershell
+python -c "from src.dataset import CUB_Dataset; from src.create_vectors import create_concept2vec; d=CUB_Dataset(); [create_concept2vec(d, '', seed=s, embedding_size=32, num_epochs=5, dataset_size=1000, initial_embedding=None) for s in [43,44,45]]"
+```
+
+Create TCAV for CUB:
+```powershell
+bash scripts/bash_scripts/create_tcav_cub.sh
+```
+
+Train CEM for CUB:
+```powershell
+python -m scripts.cem_scripts.extract_cem_concepts --experiment_name cub --num_gpus 1 --num_epochs 50 --validation_epochs 25 --seed 43 --concept_pair_loss_weight 0
+python -m scripts.cem_scripts.extract_cem_concepts --experiment_name cub --num_gpus 1 --num_epochs 50 --validation_epochs 25 --seed 44 --concept_pair_loss_weight 0
+python -m scripts.cem_scripts.extract_cem_concepts --experiment_name cub --num_gpus 1 --num_epochs 50 --validation_epochs 25 --seed 45 --concept_pair_loss_weight 0
+```
+
+CUB full metrics and paper tables are in `scripts/Evaluate Hierarchies.ipynb`.
+That notebook also uses robustness/responsiveness variants and Shapley/model vectors; see the notebook notes below before running every cell.
+
+### 6. Outputs
+
+Basis vectors:
+```text
+results/bases/concept2vec/<dataset>/<seed>/vectors.npy
+results/bases/tcav/<dataset>/<seed>/*.pkl
+results/bases/cem/<dataset>/<seed>/*_active.npy
+results/bases/cem/<dataset>/<seed>/manifest.json
+```
+
+Evaluation and plots:
+```text
+results/evaluation/ablation/distance_<dataset>.json
+results/evaluation/ablation/agreement_<dataset>.json
+results/evaluation/<dataset>_hierarchies/*.txt
+results/figures/<dataset>/*_hierarchy.png
+```
+
+What the commands above cover:
+```text
+MNIST: Label, Concept2Vec, TCAV, CEM bases plus distance/agreement/hierarchy outputs.
+dSprites: Label, Concept2Vec, TCAV, CEM bases plus distance/agreement/hierarchy outputs.
+CUB: Concept2Vec, TCAV, CEM bases. Full CUB tables are computed in the notebook.
+```
+
+What is not produced by the default runbook:
+```text
+CheXpert data/results.
+Shapley, VAE, and model-vector bases.
+Intervention JSON/PKL files.
+Extra ablation files under results/extra_evaluation and results/evaluation/ois.
+```
+
+### 7. Notebooks And Plotting
+
+Use these after vectors exist:
+```text
+scripts/Evaluate Hierarchies.ipynb
+scripts/Plotting.ipynb
+scripts/cem_scripts/CEM Intervention Experiments.ipynb
+```
+
+Important: these are paper notebooks, not clean push-button scripts. Run them from a Jupyter server started in the repository root or `scripts/`, and keep the first `os.chdir('../')` cell consistent with that working directory. If imports fail after that cell, restart the kernel from the repository root and skip the `os.chdir('../')` cell.
+
+What each does:
+```text
+scripts/run_mnist_pipeline.py
+  Reproducible script for MNIST/dSprites basis generation, KNN/top-k agreement, hierarchy text, dendrogram PNGs.
+
+scripts/Evaluate Hierarchies.ipynb
+  Main paper evaluation notebook. Computes robustness, responsiveness, stability, truthfulness, ablation JSONs, and cross-method hierarchy distances.
+
+scripts/Plotting.ipynb
+  Builds paper plots from files under results/evaluation.
+
+src/metrics.py
+  KNN/top-k logic: get_top_k_pairs(), embedding_distance(), compute_all_metrics().
+
+src/hierarchy.py
+  Concept distance and hierarchy construction: get_concept_distances(), create_ward_hierarchy(), create_hierarchy().
+
+src/plots.py
+  Helper plotting functions for dendrograms, PCA, t-SNE, images.
+```
+
+Notebook coverage after the default runbook:
+```text
+Evaluate Hierarchies.ipynb
+  MNIST/dSprites/CUB cells for Label, Concept2Vec, TCAV, and CEM can run only after the matching base vectors exist for seeds 43, 44, 45.
+  Cells that call compute_all_metrics need _image_robustness and _image_responsiveness vectors too.
+  Cells using Chexpert_Dataset need CheXpert prepared manually.
+  Cells using load_shapley_vectors_simple need Shapley vectors and TensorFlow model weights under results/models/.
+
+Plotting.ipynb
+  Reads text/JSON files produced by Evaluate Hierarchies.ipynb and intervention experiments.
+  Later cells need results/evaluation/ois, results/extra_evaluation, results/intervention, and figures/.
+
+CEM Intervention Experiments.ipynb
+  Needs the pretrained CUB CEM model/config in models/.
+  Needs exported intervention hierarchy arrays named concept_vectors/<method>_<seed>.npy.
+  The default basis run does not create those files; export them with src.util.save_concept_vectors first.
+```
+
+To create robustness/responsiveness datasets used by the metric notebook:
+```powershell
+python -c "from src.dataset import MNIST_Dataset, DSprites_Dataset, CUB_Dataset; [getattr(d, m)() for d in [MNIST_Dataset(), DSprites_Dataset(), CUB_Dataset()] for m in ['create_robustness', 'create_responsiveness']]"
+```
+
+### 8. Replacing KNN Or Averaging
+
+Do not change vector training first. Reuse saved bases and replace evaluation logic.
+
+Current distance path:
+```text
+loader in src/concept_vectors.py
+  -> src/hierarchy.py:get_concept_distances()
+  -> pairwise distances averaged across all vectors for two concepts
+  -> src/metrics.py:get_top_k_pairs()
+  -> src/metrics.py:embedding_distance()
+```
+
+To replace KNN/top-k:
+1. Add a new metric function in `src/metrics.py`.
+2. Call it from `scripts/run_mnist_pipeline.py` or `scripts/Evaluate Hierarchies.ipynb`.
+3. Save results to a new JSON name under `results/evaluation/ablation/`, so paper metrics stay comparable.
+
+To replace pairwise averaging:
+1. Edit or wrap `src/hierarchy.py:get_concept_distances()`.
+2. Keep the loader API unchanged: `method(attribute, dataset, suffix, seed)` returns a matrix of vectors.
+3. Save new outputs under a new method/metric name.
+
+To add a new basis method:
+1. Add `load_<method>_vectors_simple(attribute, dataset, suffix, seed)` in `src/concept_vectors.py`.
+2. Add it to `METHODS` in `scripts/run_mnist_pipeline.py` or the notebook method list.
+3. Keep outputs under `results/bases/<method>/<dataset>/<seed>/`.
 

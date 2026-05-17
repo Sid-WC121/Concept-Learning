@@ -309,7 +309,7 @@ def save_resnet_model(modification_function,output_file):
     Side Effects: Saves a Resnet model
     """
     
-    m = tf.keras.applications.Resnet50(
+    m = tf.keras.applications.ResNet50(
         include_top=True,
         weights="imagenet",
         input_tensor=None,
@@ -321,7 +321,7 @@ def save_resnet_model(modification_function,output_file):
     m.compile(optimizer='Adam',
               loss='sparse_categorical_crossentropy')
     
-    weights = np.array(m.get_weights())  
+    weights = np.array(m.get_weights(), dtype=object)
     new_weights = modification_function(weights)
     m.set_weights(new_weights)
     
@@ -351,7 +351,7 @@ def save_vgg_model(modification_function,output_file):
     m.compile(optimizer='Adam',
               loss='sparse_categorical_crossentropy')
     
-    weights = np.array(m.get_weights())  
+    weights = np.array(m.get_weights(), dtype=object)
     new_weights = modification_function(weights)
     m.set_weights(new_weights)
     

@@ -112,6 +112,8 @@ def construct_model(
         c_extractor_arch=c_extractor_arch,
         optimizer=config['optimizer'],
         top_k_accuracy=config.get('top_k_accuracy'),
+        experiment_name=config.get("experiment_name", "default"),
+        seed=config.get("seed", -1),
         **extra_params,
     )
 
@@ -234,7 +236,7 @@ def train_model(
             independent=("Independent" in config['architecture']),
         )
     if seed is not None:
-        seed_everything(split)
+        seed_everything(seed)
 
     extr_name = config['c_extractor_arch']
     if not isinstance(extr_name, str):
@@ -485,7 +487,7 @@ def train_independent_and_sequential_model(
     gpu=int(torch.cuda.is_available()),
 ):
     if seed is not None:
-        seed_everything(split)
+        seed_everything(seed)
 
     extr_name = config['c_extractor_arch']
     if not isinstance(extr_name, str):

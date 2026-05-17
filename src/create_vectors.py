@@ -32,6 +32,26 @@ class VGGWrapper(model.KerasModelWrapper):
     def get_image_shape(self):
         return np.array([224,224,3])
 
+def ensure_tcav_target_folder(dataset, target, seed=-1, suffix="", max_examples=100):
+    folder_location = ensure_dir(DATASET_ROOT / "imagenet" / target)
+    existing_files = glob.glob(str(folder_location / "*"))
+    if len(existing_files) >= max_examples:
+        return
+
+    for f in existing_files:
+        os.remove(f)
+
+    data = dataset.get_data(seed=seed, suffix=suffix, train=True)
+    random.seed(seed if seed > -1 else None)
+    if len(data) > max_examples:
+        data = random.sample(data, max_examples)
+
+    for item in data:
+        source = dataset.path_to_image(item["img_path"])
+        file_extension = source.split(".")[-1]
+        rand_name = "".join(str(random.randint(0, 9)) for _ in range(32))
+        shutil.copy2(source, str(folder_location / f"{rand_name}.{file_extension}"))
+
 def create_concept2vec(dataset,suffix,seed=-1,
                              embedding_size=32,num_epochs=5,dataset_size=1000,initial_embedding=None,write_data=True,flip_percentage=0):
     """Generate concept2vec vectors by training a Skipgram architecture on correlated concepts
@@ -136,6 +156,7 @@ def create_tcav_dataset(attribute_name,dataset,num_random_exp,
     concepts = ["{}_{}_{}".format(attribute_name,seed,suffix)]
     target = "zebra"
     alphas = [0.1]
+    ensure_tcav_target_folder(dataset, target, seed=seed, suffix=suffix, max_examples=max_examples)
     
     create_tcav_vectors(concepts,target,model_name,bottlenecks,
                         num_random_exp,experiment_name=experiment_name,
@@ -287,34 +308,36 @@ def create_tcav_vectors(concepts,target,model_name,bottlenecks,num_random_exp,ex
     
     config = tf.compat.v1.ConfigProto()
     config.gpu_options.allow_growth = True
-    with tf.compat.v1.Session(config=config) as sess:
+    graph = tf.Graph()
+    with graph.as_default():
+        with tf.compat.v1.Session(graph=graph, config=config) as sess:
 
-        act_generator = load_activations_model(experiment_name,max_examples,model_name,sess)
-        delete_previous_activations(bottlenecks[0],concepts)
+            act_generator = load_activations_model(experiment_name,max_examples,model_name,sess)
+            delete_previous_activations(bottlenecks[0],concepts)
 
-        cav_dir = str(RESULTS_ROOT / "bases" / "tcav" / experiment_name / str(seed))
-        if not os.path.exists(cav_dir):
-            os.makedirs(cav_dir)
-        else:
-            reset_tcav_vectors(concepts,num_random_exp,experiment_name,seed,bottlenecks[0],alphas[0])
+            cav_dir = str(RESULTS_ROOT / "bases" / "tcav" / experiment_name / str(seed))
+            if not os.path.exists(cav_dir):
+                os.makedirs(cav_dir)
+            else:
+                reset_tcav_vectors(concepts,num_random_exp,experiment_name,seed,bottlenecks[0],alphas[0])
 
-        mytcav = tcav.TCAV(sess,
-                       target,
-                       concepts,
-                       bottlenecks,
-                       act_generator,
-                       alphas,
-                       cav_dir=cav_dir,
-                       num_random_exp=num_random_exp)#10)
+            mytcav = tcav.TCAV(sess,
+                           target,
+                           concepts,
+                           bottlenecks,
+                           act_generator,
+                           alphas,
+                           cav_dir=cav_dir,
+                           num_random_exp=num_random_exp)#10)
 
-        # Reset the runs so it doesn't compare random-random
-        mytcav.relative_tcav = True
-        mytcav._process_what_to_run_expand(num_random_exp=num_random_exp+1)
-        mytcav.params = mytcav.get_params()
+            # Reset the runs so it doesn't compare random-random
+            mytcav.relative_tcav = True
+            mytcav._process_what_to_run_expand(num_random_exp=num_random_exp+1)
+            mytcav.params = mytcav.get_params()
 
-        mytcav.run(run_parallel=False,num_workers=1)
-        delete_previous_activations(bottlenecks[0],concepts)
-        delete_previous_images(concepts)
+            mytcav.run(run_parallel=False,num_workers=1)
+            delete_previous_activations(bottlenecks[0],concepts)
+            delete_previous_images(concepts)
 
 def delete_previous_images(concepts):
     for c in concepts:
