@@ -98,7 +98,45 @@ dSprites train 2500, attributes 18
 CUB train 4796, val 1198, attributes 312, classes 200
 ```
 
-CheXpert is not auto-downloaded. Use the small CheXpert dataset from Kaggle and arrange it as `dataset/chexpert/images` plus `dataset/chexpert/preprocessed`.
+CheXpert requires accepting Stanford's terms via Kaggle (free account). The script auto-downloads once credentials are set.
+
+**Option A — environment variable (easiest for any collaborator):**
+```powershell
+# 1. Go to https://www.kaggle.com -> Settings -> API -> Create New Token
+#    Kaggle shows a token like: KGAT_xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# 2. Set it and run:
+pip install kaggle
+$env:KAGGLE_API_TOKEN = "KGAT_xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+python scripts/dataset_scripts/download_chexpert.py
+```
+
+Linux/macOS equivalent:
+```bash
+export KAGGLE_API_TOKEN=KGAT_xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+python scripts/dataset_scripts/download_chexpert.py
+```
+
+**Option B — kaggle.json file (classic):**
+Download `kaggle.json` from kaggle.com → Settings → API and place it at `C:\Users\<you>\.kaggle\kaggle.json`, then run the script with no flags.
+
+**Option C — manual download (no API):**
+```powershell
+# Download and unzip CheXpert-v1.0-small from https://www.kaggle.com/datasets/ashery/chexpert, then:
+python scripts/dataset_scripts/download_chexpert.py --source-dir C:\data\CheXpert-v1.0-small
+```
+
+All options produce:
+```text
+dataset/chexpert/images/<patient>/study1/<view>.jpg
+dataset/chexpert/preprocessed/train.pkl
+dataset/chexpert/preprocessed/val.pkl
+dataset/chexpert/preprocessed/test.pkl   (same as val; no held-out test split)
+```
+
+Verify:
+```powershell
+python -c "from src.dataset import Chexpert_Dataset; d=Chexpert_Dataset(); print('chexpert', len(d.get_data()), len(d.get_attributes()))"
+```
 
 ### 4. Run MNIST And dSprites Pipelines
 
