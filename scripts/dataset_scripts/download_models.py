@@ -33,7 +33,8 @@ def main():
         download(INCEPTION_URL, inception_zip)
         with zipfile.ZipFile(inception_zip) as archive:
             archive.extractall(inception_dir)
-        inception_zip.unlink(missing_ok=True)
+        if inception_zip.exists():
+            inception_zip.unlink()
     print(f"Inception5h ready: {graph_path}")
 
     mobilenet_dir = ensure_dir(model_root / "mobilenet_v2_1.0_224")
@@ -44,11 +45,13 @@ def main():
                 download(url, mobilenet_tgz)
                 with tarfile.open(mobilenet_tgz) as archive:
                     archive.extractall(mobilenet_dir)
-                mobilenet_tgz.unlink(missing_ok=True)
+                if mobilenet_tgz.exists():
+                    mobilenet_tgz.unlink()
                 print(f"MobileNet ready: {mobilenet_dir}")
                 break
             except Exception as exc:
-                mobilenet_tgz.unlink(missing_ok=True)
+                if mobilenet_tgz.exists():
+                    mobilenet_tgz.unlink()
                 print(f"Skipping MobileNet source {url}: {exc}")
         else:
             print("MobileNet not available; Inception5h is enough for TCAV.")

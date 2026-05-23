@@ -241,14 +241,15 @@ def train_model(
     extr_name = config['c_extractor_arch']
     if not isinstance(extr_name, str):
         extr_name = "lambda"
+    run_prefix = f"{config.get('experiment_name', 'default')}_"
     if split is not None:
         full_run_name = (
-            f"{config['architecture']}{config.get('extra_name', '')}_"
+            f"{run_prefix}{config['architecture']}{config.get('extra_name', '')}_"
             f"{extr_name}_fold_{split + 1}"
         )
     else:
         full_run_name = (
-            f"{config['architecture']}{config.get('extra_name', '')}_"
+            f"{run_prefix}{config['architecture']}{config.get('extra_name', '')}_"
             f"{extr_name}"
         )
     print(f"[Training {full_run_name}]")

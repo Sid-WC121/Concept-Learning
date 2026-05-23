@@ -336,7 +336,7 @@ if __name__ == "__main__":
         n_tasks = 2
     elif experiment_name == "cub":
         train_dl, valid_dl, test_dl = generate_data_loaders_cub(suffix)
-        n_concepts = 112
+        n_concepts = 312
         n_tasks = 200
     elif experiment_name == "mnist":
         train_dl, valid_dl, test_dl = generate_data_loaders_mnist(suffix)
@@ -384,7 +384,8 @@ if __name__ == "__main__":
         imbalance = find_class_imbalance(train_data_path, True)
     elif experiment_name == 'mnist':
         extractor_arch = "resnet34"
-        imbalance = None
+        train_data_path = str(DATASET_ROOT / "colored_mnist" / "preprocessed" / "train.pkl")
+        imbalance = find_class_imbalance(train_data_path, True)
     elif experiment_name == 'dsprites':
         extractor_arch = "resnet34"
         imbalance = None
@@ -425,7 +426,7 @@ if __name__ == "__main__":
     )
     config["architecture"] = "ConceptEmbeddingModel"
     sample_tag = f"{args.sample_train:g}_{args.sample_valid:g}_{args.sample_test:g}".replace(".", "p")
-    config["extra_name"] = f"New_seed_{seed}_epochs_{num_epochs}_sample_{sample_tag}"
+    config["extra_name"] = f"New_{experiment_name}_seed_{seed}_epochs_{num_epochs}_sample_{sample_tag}"
     config["shared_prob_gen"] = True
     config["sigmoidal_prob"] = True
     config["sigmoidal_embedding"] = False
