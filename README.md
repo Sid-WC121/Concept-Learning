@@ -34,6 +34,8 @@ Linux/Modal:
 ```bash
 conda env create -f environment-linux.yaml
 conda activate concepts
+
+export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH. # for gpu connection issue
 ```
 
 Check GPU visibility:
@@ -138,69 +140,175 @@ Verify:
 python -c "from src.dataset import Chexpert_Dataset; d=Chexpert_Dataset(); print('chexpert', len(d.get_data()), len(d.get_attributes()))"
 ```
 
-### 4. Run MNIST And dSprites Pipelines
+### 4. Running Each Method By Dataset
 
-Exact paper-style defaults:
+Below are the estimated wall-clock times **per seed** on a system with a single GPU and SSD storage. Multiply by 3 (seeds 43, 44, 45) for full paper runs. Times are rough — actual duration depends on GPU model, CPU, disk speed, and system load.
+
+The **Label** baseline is instant (no training — one-hot concept vectors).
+
+#### MNIST (20 attributes, 10 classes, 60K train / 10K val)
+
+| Method | Time (per seed) | Notes |
+|--------|-----------------|-------|
+| Label | <1s | Hardcoded one-hot vectors |
+| Concept2Vec | ~1 min | 1000 samples, 5 epochs, skipgram |
+| TCAV | ~20-30 min | 20 attributes × 3 random experiments; uses GoogleNet |
+| CEM | ~10-15 min | ResNet34 backbone on 28×28 images |
+| VAE | ~5-10 min | 5% training data (3K), 30 epochs, small conv net |
+
+Commands:
 ```powershell
+# All methods (Label, Concept2Vec, TCAV, CEM) — paper default:
 python scripts/run_mnist_pipeline.py --dataset mnist
-python scripts/run_mnist_pipeline.py --dataset dsprites
-```
 
-This trains/loads:
-```text
-Label
-Concept2Vec
-TCAV
-CEM
-```
+# VAE:
+python src/models.py --algorithm vae --seed 43 --dataset mnist
 
-Seeds:
-```text
-43, 44, 45
-```
+# VAE with concept alignment:
+python src/models.py --algorithm vae_concept --seed 43 --dataset mnist
 
-CEM defaults:
-```text
-50 epochs
-validation every 25 epochs
-ResNet34 extractor
-concept_pair_loss_weight=0
-```
+# Robustness/responsiveness variants for all 5 datasets:
+bash scripts/bash_scripts/create_vae_mnist.sh
+bash scripts/bash_scripts/create_model_mnist.sh
 
-Evaluate only after vectors already exist:
-```powershell
+# Evaluate only (after vectors exist):
 python scripts/run_mnist_pipeline.py --dataset mnist --eval-only
+```
+
+Robustness/responsiveness dataset variants must be created first:
+```powershell
+python -c "from src.dataset import MNIST_Dataset; d=MNIST_Dataset(); d.create_robustness(); d.create_responsiveness()"
+```
+
+#### dSprites (18 attributes, 100 classes, 2500 train / 750 val)
+
+| Method | Time (per seed) | Notes |
+|--------|-----------------|-------|
+| Label | <1s | Hardcoded one-hot |
+| Concept2Vec | ~1 min | Same 1000-sample skipgram |
+| TCAV | ~10-15 min | 18 attributes × 3 random experiments |
+| CEM | ~10-15 min | ResNet34 backbone; SLURM wall-time 15 min |
+| VAE | ~3-5 min | Small dataset, 30 epochs |
+
+Commands:
+```powershell
+# All four base methods:
+python scripts/run_mnist_pipeline.py --dataset dsprites
+
+# TCAV individually (with robustness/responsiveness variants):
+bash scripts/bash_scripts/create_tcav_dsprites.sh
+
+# CEM individually:
+python -m scripts.cem_scripts.extract_cem_concepts --experiment_name dsprites --num_gpus 1 --num_epochs 50 --validation_epochs 25 --seed 43
+
+# Evaluate only:
 python scripts/run_mnist_pipeline.py --dataset dsprites --eval-only
 ```
 
-### 5. Run CUB Basis Generation
+#### CUB (312 attributes, 200 classes, 4796 train / 1198 val)
 
-CUB dataset prep is done by:
-```powershell
-python scripts/dataset_scripts/download_cub.py
-```
+| Method | Time (per seed) | Notes |
+|--------|-----------------|-------|
+| Label | <1s | Hardcoded one-hot |
+| Concept2Vec | ~1-2 min | Still 1000 samples; 312 concepts make skipgram slightly larger |
+| TCAV | ~5-10 hrs | **312 attributes × 3 random experiments; runs VGG16**. Run overnight |
+| CEM | ~3-4 hrs | 312 concepts, ResNet34 backbone, 50 epochs; SLURM wall-time 4 hrs |
+| VAE | ~15-30 min | Full CUB dataset (64×64 images), 30 epochs |
 
-Create Concept2Vec for CUB:
+Commands:
 ```powershell
+# Concept2Vec:
 python -c "from src.dataset import CUB_Dataset; from src.create_vectors import create_concept2vec; d=CUB_Dataset(); [create_concept2vec(d, '', seed=s, embedding_size=32, num_epochs=5, dataset_size=1000, initial_embedding=None) for s in [43,44,45]]"
-```
 
-Create TCAV for CUB:
-```powershell
+# TCAV (slow — 5-10 hrs per seed):
 bash scripts/bash_scripts/create_tcav_cub.sh
-```
 
-Train CEM for CUB:
-```powershell
+# CEM:
 python -m scripts.cem_scripts.extract_cem_concepts --experiment_name cub --num_gpus 1 --num_epochs 50 --validation_epochs 25 --seed 43 --concept_pair_loss_weight 0
 python -m scripts.cem_scripts.extract_cem_concepts --experiment_name cub --num_gpus 1 --num_epochs 50 --validation_epochs 25 --seed 44 --concept_pair_loss_weight 0
 python -m scripts.cem_scripts.extract_cem_concepts --experiment_name cub --num_gpus 1 --num_epochs 50 --validation_epochs 25 --seed 45 --concept_pair_loss_weight 0
+
+# VAE:
+python src/models.py --algorithm vae --seed 43 --dataset cub
+
+# VAE with concept alignment (latent_dim = 312):
+python src/models.py --algorithm vae_concept --seed 43 --dataset cub
 ```
 
 CUB full metrics and paper tables are in `scripts/Evaluate Hierarchies.ipynb`.
 That notebook also uses robustness/responsiveness variants and Shapley/model vectors; see the notebook notes below before running every cell.
 
-### 6. Outputs
+Robustness/responsiveness dataset variants:
+```powershell
+python -c "from src.dataset import CUB_Dataset; d=CUB_Dataset(); d.create_robustness(); d.create_responsiveness()"
+```
+
+#### CheXpert (13 attributes, 2 classes)
+
+| Method | Time (per seed) | Notes |
+|--------|-----------------|-------|
+| Label | <1s | Hardcoded one-hot |
+| Concept2Vec | ~1 min | Same skipgram procedure |
+| TCAV | ~10-15 min | 13 attributes |
+| CEM | ~20-30 min | SLURM wall-time 30 min |
+
+Commands:
+```powershell
+# Concept2Vec:
+python -c "from src.dataset import Chexpert_Dataset; from src.create_vectors import create_concept2vec; d=Chexpert_Dataset(); [create_concept2vec(d, '', seed=s) for s in [43,44,45]]"
+
+# TCAV:
+bash scripts/bash_scripts/create_tcav_chexpert.sh
+
+# CEM:
+python -m scripts.cem_scripts.extract_cem_concepts --experiment_name chexpert --num_gpus 1 --num_epochs 50 --validation_epochs 25 --seed 43
+```
+
+### 5. Full Pipeline (All Methods At Once)
+
+The pipeline script handles Label, Concept2Vec, TCAV, and CEM for MNIST and dSprites with one command:
+
+```powershell
+python scripts/run_mnist_pipeline.py --dataset mnist
+python scripts/run_mnist_pipeline.py --dataset dsprites
+```
+
+CEM defaults (overridable via flags):
+```text
+50 epochs
+validation every 25 epochs
+ResNet34 extractor
+concept_pair_loss_weight=0
+1 GPU
+```
+
+Partial runs (skip methods):
+```powershell
+python scripts/run_mnist_pipeline.py --dataset mnist --skip-cem --skip-tcav
+python scripts/run_mnist_pipeline.py --dataset mnist --skip-concept2vec --eval-only
+```
+
+Seeds used:
+```text
+43, 44, 45
+```
+
+### 6. Total Estimated Run Times (Full Paper — All 3 Seeds)
+
+| Step | MNIST | dSprites | CUB | CheXpert |
+|------|-------|----------|-----|----------|
+| Dataset creation | 5-10 min | 5 min | 10 min | 5-10 min |
+| Label | <1s | <1s | <1s | <1s |
+| Concept2Vec | 3 min | 3 min | 5 min | 3 min |
+| TCAV | 1-1.5 hr | 30-45 min | 15-30 hrs | 30-45 min |
+| CEM | 30-45 min | 30-45 min | 9-12 hrs | 1-1.5 hr |
+| VAE | 15-30 min | 10-15 min | 45-90 min | — |
+| Pipeline + eval | 2-3 hrs | 1-2 hrs | — | — |
+| **Total** | **~3-5 hrs** | **~2-3 hrs** | **~25-45 hrs** | **~2-3 hrs** |
+
+TCAV on CUB dominates the total (312 attributes × 3 random experiments × 3 seeds). Run it overnight or on a GPU cluster. The `--skip-tcav` flag lets you evaluate the other methods while TCAV runs separately.
+
+### 7. Outputs
 
 Basis vectors:
 ```text
@@ -233,7 +341,7 @@ Intervention JSON/PKL files.
 Extra ablation files under results/extra_evaluation and results/evaluation/ois.
 ```
 
-### 7. Notebooks And Plotting
+### 8. Notebooks And Plotting
 
 Use these after vectors exist:
 ```text
@@ -288,7 +396,7 @@ To create robustness/responsiveness datasets used by the metric notebook:
 python -c "from src.dataset import MNIST_Dataset, DSprites_Dataset, CUB_Dataset; [getattr(d, m)() for d in [MNIST_Dataset(), DSprites_Dataset(), CUB_Dataset()] for m in ['create_robustness', 'create_responsiveness']]"
 ```
 
-### 8. Replacing KNN Or Averaging
+### 9. Replacing KNN Or Averaging
 
 Do not change vector training first. Reuse saved bases and replace evaluation logic.
 

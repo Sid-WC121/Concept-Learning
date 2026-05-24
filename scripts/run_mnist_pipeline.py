@@ -2,6 +2,9 @@ import argparse
 import json
 import subprocess
 import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from src.paths import DATASET_ROOT, ensure_dir
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -219,7 +222,7 @@ def main():
     parser = argparse.ArgumentParser(description="Run concept basis pipeline.")
     parser.add_argument("--dataset", choices=["mnist", "dsprites"], default="mnist")
     parser.add_argument("--cem-epochs", type=int, default=50)
-    parser.add_argument("--cem-validation-epochs", type=int, default=25)
+    parser.add_argument("--cem-validation-epochs", type=int, default=1)
     parser.add_argument("--cem-num-gpus", type=int, default=1)
     parser.add_argument("--cem-num-workers", type=int, default=0)
     parser.add_argument("--cem-sample", type=float, default=1.0)

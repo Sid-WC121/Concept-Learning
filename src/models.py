@@ -197,6 +197,10 @@ def create_decoder(size,channels,latent_dim):
     decoder_outputs = layers.Conv2DTranspose(channels, 3, activation="sigmoid", padding="same")(x)
     return keras.Model(latent_inputs, decoder_outputs, name="decoder")
 
+def _load_vae_images(data, dataset):
+    files = [str(DATASET_ROOT / i['img_path']) for i in data]
+    return np.array([file_to_numpy(f) for f in files])
+
 def train_VAE(dataset,suffix,seed,save_location="", latent_dim=2,epochs=30,concept_alignment=False):
     """Train a VAE model on some dataset, such as MNIST
     
@@ -214,17 +218,24 @@ def train_VAE(dataset,suffix,seed,save_location="", latent_dim=2,epochs=30,conce
     np.random.seed(seed)
     tf.keras.utils.set_random_seed(seed)
     
-    all_data = dataset.get_data(seed=seed,suffix=suffix)
-    all_files = [str(DATASET_ROOT / i['img_path']) for i in all_data]
-    images = np.array([file_to_numpy(i) for i in all_files])
-    concepts = np.array([i['attribute_label'] for i in all_data])
+    train_data = dataset.get_data(seed=seed,suffix=suffix,train=True)
+    val_data = dataset.get_data(seed=seed,suffix=suffix,train=False)
+    
+    if dataset.experiment_name == "mnist":
+        train_data = train_data[:len(train_data)//20]
+        val_data = val_data[:len(val_data)//20]
+    
+    train_images = _load_vae_images(train_data, dataset)
+    train_concepts = np.array([i['attribute_label'] for i in train_data])
+    val_images = _load_vae_images(val_data, dataset)
+    val_concepts = np.array([i['attribute_label'] for i in val_data])
     
     size = 28
     
     if dataset.experiment_name == "cub":
-        # Convert all images to the same size
         size = 64
-        images = resize_cub(images)
+        train_images = resize_cub(train_images)
+        val_images = resize_cub(val_images)
         
     decoder_3 = create_decoder(size,3,latent_dim)
     encoder_3 = create_encoder(size,3,latent_dim)
@@ -232,13 +243,16 @@ def train_VAE(dataset,suffix,seed,save_location="", latent_dim=2,epochs=30,conce
     vae = VAE(encoder_3, decoder_3,concept_alignment=concept_alignment)
     vae.compile(optimizer=keras.optimizers.Adam())
 
-    concepts = tf.convert_to_tensor(concepts)
-    images = tf.convert_to_tensor(images)
+    train_concepts = tf.convert_to_tensor(train_concepts)
+    train_images = tf.convert_to_tensor(train_images)
+    val_concepts = tf.convert_to_tensor(val_concepts)
+    val_images = tf.convert_to_tensor(val_images)
     
     if concept_alignment:
-        vae.fit([images,concepts], epochs=epochs, batch_size=128)    
+        vae.fit([train_images,train_concepts], epochs=epochs, batch_size=128,
+                validation_data=([val_images,val_concepts], None))
     else:
-        vae.fit(images,epochs=epochs,batch_size=128)
+        vae.fit(train_images,epochs=epochs,batch_size=128,validation_data=val_images)
     
     if save_location != "":
         output_path = RESULTS_ROOT / "models" / save_location
@@ -251,11 +265,13 @@ def save_vae(model,dataset,suffix,seed,concept_alignment=False):
     all_data = dataset.get_data()
     random.shuffle(all_data)
     
-    all_data = all_data[:10000] 
-    all_images = [file_to_numpy(str(DATASET_ROOT / i['img_path'])) for i in all_data]
-    all_images = resize_cub(np.array(all_images))
+    all_data = all_data[:10000]
+    all_images = np.array([file_to_numpy(str(DATASET_ROOT / i['img_path'])) for i in all_data])
     
-    embeddings = model.encoder.predict(np.array(all_images).astype("float32")/255)[2]    
+    if dataset.experiment_name == "cub":
+        all_images = resize_cub(all_images)
+    
+    embeddings = model.encoder.predict(all_images)[2]
 
     average_embedding_by_concept = {}
     

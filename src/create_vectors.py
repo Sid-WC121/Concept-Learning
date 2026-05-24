@@ -91,10 +91,9 @@ def create_concept2vec(dataset,suffix,seed=-1,
     SkipGram = create_skipgram_architecture(embedding_size,V,initial_embedding=initial_embedding)
     
     for _ in range(num_epochs):
-        X = np.zeros((0,2),dtype=np.int32)
-        Y = np.zeros((0,))
+        batch_data = []
+        batch_labels = []
 
-        # Collect the dataset
         for i, doc in enumerate(all_data):
             formatted_data = [attributes[j] for j,indicator in enumerate(doc['attribute_label']) if indicator == 1]
             
@@ -102,11 +101,11 @@ def create_concept2vec(dataset,suffix,seed=-1,
                 continue
             data, labels = generate_skipgram_dataset(formatted_data,attributes,8,8)   
             
-            data = np.array(data,dtype=np.int32)
-
-            X = np.concatenate([X,data])
-            Y = np.concatenate([Y,labels])
+            batch_data.append(data)
+            batch_labels.append(labels)
             
+        X = np.concatenate(batch_data, axis=0).astype(np.int32)
+        Y = np.concatenate(batch_labels, axis=0)
         X_0 = X[:,0]
         X_1 = X[:,1]
         
@@ -207,7 +206,7 @@ def load_activations_model(experiment_name,max_examples,model_name,sess):
         elif model_name == "VGG16Responsiveness":
             GRAPH_PATH = str(DATASET_ROOT / "models" / "keras" / "model_vgg16_responsive.h5")
             
-        LABEL_PATH = str(DATASET_ROOT / "imagenet" / "imagenet_comp_graph_label_strings.txt")
+        LABEL_PATH = str(DATASET_ROOT / "models" / "inception5h" / "imagenet_comp_graph_label_strings.txt")
         mymodel = VGGWrapper(sess,
                                         GRAPH_PATH,
                                         LABEL_PATH)

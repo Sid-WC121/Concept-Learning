@@ -2,9 +2,14 @@
 
 for seed in 43 44 45
 do
-    for algorithm in model_mnist model_mnist_model_robustness model_mnist_model_responsiveness model_mnist_image_robustness model_mnist_image_responsiveness
+    for suffix in "" "model_robustness" "model_responsiveness" "image_robustness" "image_responsiveness"
     do
-        echo $seed $algorithm 
-        python src/concept_vectors.py --algorithm $algorithm --class_name 0_number --target zebra --num_random_exp 10 --images_per_folder 100 --seed $seed
+        if [ -z "$suffix" ]; then
+            echo "$seed mnist"
+            python src/concept_vectors.py --algorithm model --dataset mnist --seed $seed
+        else
+            echo "$seed mnist_$suffix"
+            python src/concept_vectors.py --algorithm model --dataset mnist --suffix $suffix --seed $seed
+        fi
     done
 done

@@ -292,7 +292,7 @@ if __name__ == "__main__":
                         help='Number of GPUs to use when training',
                         default=0)
     parser.add_argument('--num_epochs',type=int,default=50,help='How many epochs to train for')
-    parser.add_argument('--validation_epochs',type=int,default=25,help='How often should we run the validation script')
+    parser.add_argument('--validation_epochs',type=int,default=1,help='How often should we run the validation script')
     parser.add_argument('--seed',type=int,default=42,help='Random seed for training')
     parser.add_argument('--num_workers',type=int,default=8,help='Number of workers')
     parser.add_argument('--sample_train',type=float,default=1.0,help='Fraction of the train dataset to sample')

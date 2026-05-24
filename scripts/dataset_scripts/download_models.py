@@ -2,7 +2,9 @@ from pathlib import Path
 import tarfile
 import urllib.request
 import zipfile
+import sys
 
+sys.path.append(str(Path(__file__).resolve().parents[2]))
 from src.paths import DATASET_ROOT, ensure_dir
 
 
@@ -20,6 +22,38 @@ def download(url, output):
         return
     print(f"Downloading {url}")
     urllib.request.urlretrieve(url, output)
+
+
+def resave_keras_models():
+    """Generate VGG16 and ResNet50 Keras models with ImageNet weights."""
+    from src.util import save_vgg_model, save_resnet_model
+    keras_dir = ensure_dir(DATASET_ROOT / "models" / "keras")
+
+    vgg16_path = keras_dir / "model_vgg16.h5"
+    if not vgg16_path.exists():
+        print(f"Generating {vgg16_path} (downloads ImageNet weights)...")
+        save_vgg_model(lambda w: w, str(vgg16_path))
+    print(f"VGG16 ready: {vgg16_path}")
+
+    vgg16_robust_path = keras_dir / "model_vgg16_robust.h5"
+    if not vgg16_robust_path.exists():
+        print(f"Generating {vgg16_robust_path}...")
+        from src.util import perturb_weights
+        save_vgg_model(perturb_weights, str(vgg16_robust_path))
+    print(f"VGG16 Robust ready: {vgg16_robust_path}")
+
+    vgg16_responsive_path = keras_dir / "model_vgg16_responsive.h5"
+    if not vgg16_responsive_path.exists():
+        print(f"Generating {vgg16_responsive_path}...")
+        from src.util import responsive_weights
+        save_vgg_model(responsive_weights, str(vgg16_responsive_path))
+    print(f"VGG16 Responsive ready: {vgg16_responsive_path}")
+
+    resnet_path = keras_dir / "model_resnet.h5"
+    if not resnet_path.exists():
+        print(f"Generating {resnet_path} (downloads ImageNet weights)...")
+        save_resnet_model(lambda w: w, str(resnet_path))
+    print(f"ResNet50 ready: {resnet_path}")
 
 
 def main():
@@ -57,6 +91,8 @@ def main():
             print("MobileNet not available; Inception5h is enough for TCAV.")
     else:
         print(f"MobileNet ready: {mobilenet_dir}")
+
+    resave_keras_models()
 
 
 if __name__ == "__main__":
