@@ -2,9 +2,12 @@ import argparse
 import json
 import subprocess
 import sys
+import os
 from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 from src.paths import DATASET_ROOT, ensure_dir
+
+os.environ.setdefault("TF_FORCE_GPU_ALLOW_GROWTH", "true")
 
 import matplotlib.pyplot as plt
 import numpy as np

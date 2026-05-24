@@ -23,6 +23,10 @@ import os
 import shutil
 from src.paths import DATASET_ROOT, RESULTS_ROOT, ensure_dir
 
+os.environ['OMP_NUM_THREADS'] = '4'
+os.environ['TF_NUM_THREADS'] = '4'
+os.environ['NUMEXPR_NUM_THREADS'] = '4'
+
 image_dir = str(DATASET_ROOT / "imagenet")
 class ResnetWrapper(model.KerasModelWrapper):
     def get_image_shape(self):
@@ -307,12 +311,28 @@ def create_tcav_vectors(concepts,target,model_name,bottlenecks,num_random_exp,ex
     
     config = tf.compat.v1.ConfigProto()
     config.gpu_options.allow_growth = True
+    config.gpu_options.force_gpu_compatible = True
+    config.allow_soft_placement = True
+    config.intra_op_parallelism_threads = 1
+    config.inter_op_parallelism_threads = 1
     graph = tf.Graph()
     with graph.as_default():
         with tf.compat.v1.Session(graph=graph, config=config) as sess:
 
             act_generator = load_activations_model(experiment_name,max_examples,model_name,sess)
             delete_previous_activations(bottlenecks[0],concepts)
+
+            # Patch: prevent thread pool exhaustion from tcav's load_images_from_files
+            def _safe_get_examples(concept, _gen=act_generator):
+                concept_dir = os.path.join(_gen.source_dir, concept)
+                img_paths = [
+                    os.path.join(concept_dir, d) for d in tf.io.gfile.listdir(concept_dir)
+                ]
+                return _gen.load_images_from_files(
+                    img_paths, _gen.max_examples,
+                    shape=_gen.model.get_image_shape()[:2],
+                    run_parallel=False, num_workers=1)
+            act_generator.get_examples_for_concept = _safe_get_examples
 
             cav_dir = str(RESULTS_ROOT / "bases" / "tcav" / experiment_name / str(seed))
             if not os.path.exists(cav_dir):
@@ -327,16 +347,17 @@ def create_tcav_vectors(concepts,target,model_name,bottlenecks,num_random_exp,ex
                            act_generator,
                            alphas,
                            cav_dir=cav_dir,
-                           num_random_exp=num_random_exp)#10)
+                           num_random_exp=num_random_exp)
 
-            # Reset the runs so it doesn't compare random-random
             mytcav.relative_tcav = True
             mytcav._process_what_to_run_expand(num_random_exp=num_random_exp+1)
             mytcav.params = mytcav.get_params()
 
-            mytcav.run(run_parallel=False,num_workers=1)
-            delete_previous_activations(bottlenecks[0],concepts)
-            delete_previous_images(concepts)
+            try:
+                mytcav.run(run_parallel=False, num_workers=1)
+            finally:
+                delete_previous_activations(bottlenecks[0], concepts)
+                delete_previous_images(concepts)
 
 def delete_previous_images(concepts):
     for c in concepts:

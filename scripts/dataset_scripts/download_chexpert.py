@@ -3,23 +3,15 @@
 Dataset: https://www.kaggle.com/datasets/ashery/chexpert
 
 AUTO-DOWNLOAD (recommended)
-  Requires a Kaggle account and the 'kaggle' package (pip install kaggle).
-  Get a token at https://www.kaggle.com -> API -> Create New Token.
+  Requires kagglehub (pip install kagglehub) and a Kaggle API token.
+  Get a token at https://www.kaggle.com -> Settings -> API -> Create New Token.
 
-  Windows cmd.exe / conda prompt (default):
-    set KAGGLE_API_TOKEN=KGAT_...
-    python scripts/dataset_scripts/download_chexpert.py
-
-  Windows PowerShell:
-    $env:KAGGLE_API_TOKEN = "KGAT_..."
-    python scripts/dataset_scripts/download_chexpert.py
-
-  Linux / macOS:
+  Linux / macOS / WSL:
     export KAGGLE_API_TOKEN=KGAT_...
     python scripts/dataset_scripts/download_chexpert.py
 
-  Alternatively, place kaggle.json at ~/.kaggle/kaggle.json and run the
-  script with no flags.
+  Windows:
+    set KAGGLE_API_TOKEN=KGAT_... && python scripts/dataset_scripts/download_chexpert.py
 
 MANUAL (if the zip is already downloaded and extracted):
     python scripts/dataset_scripts/download_chexpert.py \\
@@ -50,7 +42,6 @@ import os
 import pickle
 import shutil
 import sys
-import zipfile
 from pathlib import Path
 
 import pandas as pd
@@ -71,45 +62,31 @@ CONCEPT_COLS = [
 
 
 def kaggle_credentials_present() -> bool:
-    if os.environ.get("KAGGLE_API_TOKEN") or os.environ.get("KAGGLE_KEY"):
-        return True
-    config_dir = Path(os.environ.get("KAGGLE_CONFIG_DIR", Path.home() / ".kaggle"))
-    return (config_dir / "kaggle.json").exists()
+    return bool(os.environ.get("KAGGLE_API_TOKEN"))
+
+
+KAGGLEHUB_CACHE = Path.home() / ".cache" / "kagglehub"
 
 
 def download_via_kaggle(dest_dir: Path) -> Path:
     try:
-        import kaggle
-        kaggle.api.authenticate()
+        import kagglehub
     except ImportError:
-        sys.exit("ERROR: Run 'pip install kaggle' then set KAGGLE_API_TOKEN and retry.")
-    except Exception as exc:
+        sys.exit("ERROR: Run 'pip install kagglehub' then set KAGGLE_API_TOKEN and retry.")
+
+    if not os.environ.get("KAGGLE_API_TOKEN"):
         sys.exit(
-            f"ERROR: Kaggle auth failed: {exc}\n"
-            "Set $env:KAGGLE_API_TOKEN = 'KGAT_...' (PowerShell) or "
-            "export KAGGLE_API_TOKEN=KGAT_... (bash) and retry.\n"
+            "ERROR: KAGGLE_API_TOKEN not set.\n"
+            "export KAGGLE_API_TOKEN=KGAT_... && python scripts/dataset_scripts/download_chexpert.py\n"
             "Get a token at https://www.kaggle.com -> Settings -> API."
         )
 
-    zip_path = dest_dir / "chexpert.zip"
-    if not zip_path.exists():
-        print(f"Downloading {KAGGLE_DATASET} from Kaggle (~11 GB) ...")
-        kaggle.api.dataset_download_files(KAGGLE_DATASET, path=str(dest_dir), unzip=False, quiet=False)
-        zips = list(dest_dir.glob("*.zip"))
-        if not zips:
-            sys.exit("ERROR: Download completed but no zip file found.")
-        if zips[0] != zip_path:
-            zips[0].rename(zip_path)
-    else:
-        print(f"Zip already present at {zip_path}, skipping download.")
+    print(f"Downloading {KAGGLE_DATASET} from Kaggle (~11 GB) ...")
+    kagglehub.dataset_download(KAGGLE_DATASET)
 
-    print("Extracting ...")
-    with zipfile.ZipFile(zip_path, "r") as zf:
-        zf.extractall(dest_dir)
-
-    found = sorted(dest_dir.rglob("train.csv"))
+    found = sorted(KAGGLEHUB_CACHE.rglob("train.csv"))
     if not found:
-        sys.exit("ERROR: train.csv not found after extraction.")
+        sys.exit("ERROR: train.csv not found after download.")
     return found[0].parent
 
 
@@ -176,6 +153,16 @@ def process_split(csv_path: Path, split_root: Path, split_name: str, id_offset: 
     return records
 
 
+def _cleanup_source(source_dir: Path, dl_dir):
+    kaggle_cache = KAGGLEHUB_CACHE / "datasets" / KAGGLE_DATASET
+    if kaggle_cache.exists():
+        size = sum(f.stat().st_size for f in kaggle_cache.rglob("*") if f.is_file())
+        print(f"  Removing kagglehub cache ({size / 1e9:.1f} GB) ...")
+        shutil.rmtree(kaggle_cache)
+    if dl_dir and dl_dir.exists():
+        shutil.rmtree(dl_dir)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Download and prepare CheXpert-v1.0-small.",
@@ -193,22 +180,21 @@ def main():
     )
     args = parser.parse_args()
 
-    if args.source_dir is not None:
-        source_dir = args.source_dir.resolve()
+    source_dir = args.source_dir.resolve() if args.source_dir else None
+    dl_dir = None
+
+    if source_dir is not None:
         print(f"Using source: {source_dir}")
     elif kaggle_credentials_present():
         dl_dir = args.kaggle_download_dir or (CHEXPERT_DIR / "_download")
-        ensure_dir(dl_dir)
         source_dir = download_via_kaggle(dl_dir)
         print(f"Source extracted to: {source_dir}")
     else:
         sys.exit(
             "No Kaggle credentials found and no --source-dir given.\n\n"
             "Quickest setup:\n"
-            "  pip install kaggle\n"
-            "  # Get token at https://www.kaggle.com -> Settings -> API -> Create New Token\n"
-            "  set KAGGLE_API_TOKEN=KGAT_...         (cmd.exe / conda prompt)\n"
-            "  $env:KAGGLE_API_TOKEN = 'KGAT_...'   (PowerShell)\n"
+            "  pip install kagglehub\n"
+            "  export KAGGLE_API_TOKEN=KGAT_...\n"
             "  python scripts/dataset_scripts/download_chexpert.py\n\n"
             "Or pass an already-extracted folder:\n"
             "  python scripts/dataset_scripts/download_chexpert.py --source-dir <path>"
@@ -241,6 +227,11 @@ def main():
             pickle.dump(data, f)
 
     print(f"\nDone — {len(train_records)} train / {len(val_records)} val records.")
+
+    print("Cleaning up downloaded source files ...")
+    if args.source_dir is None and source_dir:
+        _cleanup_source(source_dir, dl_dir)
+
     print('Verify: python -c "from src.dataset import Chexpert_Dataset; d=Chexpert_Dataset(); print(len(d.get_data()), len(d.get_attributes()))"')
 
 

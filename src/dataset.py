@@ -86,7 +86,7 @@ class Dataset:
         
         for file_name in [self.pkl_path,self.test_pkl_path]:
             input_file = file_name.format('')
-            output_file = file_name.format('_image_robustness')
+            output_file = file_name.format('robustness/')
             flip_concept_labels_file(input_file,
                                      output_file,
                                      flip_probability,
@@ -99,7 +99,7 @@ class Dataset:
         flip_probability = 0.5
         for file_name in [self.pkl_path,self.test_pkl_path]:
             input_file = file_name.format('')
-            output_file = file_name.format('_image_responsiveness')
+            output_file = file_name.format('responsiveness/')
 
             flip_concept_labels_file(input_file,
                                      output_file,

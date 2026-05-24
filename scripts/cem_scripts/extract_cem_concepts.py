@@ -284,6 +284,61 @@ def generate_data_loaders_dsprites(suffix):
 
     return train_dl, valid_dl, test_dl
 
+def generate_data_loaders_chexpert(suffix):
+    """Generate Chexpert train, validation, and test dataloaders."""
+
+    if suffix in ["_model_robustness","_model_responsiveness"]:
+        suffix = ""
+
+    chexpert_location = DATASET_ROOT / "chexpert{}".format(suffix)
+    train_data_path = str(chexpert_location / "preprocessed" / "train.pkl")
+    valid_data_path = str(chexpert_location / "preprocessed" / "val.pkl")
+    test_data_path = str(chexpert_location / "preprocessed" / "test.pkl")
+
+    train_dl = load_data(
+        pkl_paths=[train_data_path],
+        use_attr=True,
+        no_img=False,
+        batch_size=64,
+        uncertain_label=False,
+        n_class_attr=2,
+        image_dir=str(chexpert_location / "images"),
+        resampling=False,
+        root_dir=str(DATASET_ROOT),
+        num_workers=num_workers,
+        path_transform=None
+    )
+
+    valid_dl = load_data(
+        pkl_paths=[valid_data_path],
+        use_attr=True,
+        no_img=False,
+        batch_size=64,
+        uncertain_label=False,
+        n_class_attr=2,
+        image_dir=str(chexpert_location / "images"),
+        resampling=False,
+        root_dir=str(DATASET_ROOT),
+        num_workers=num_workers,
+        path_transform=None
+    )
+
+    test_dl = load_data(
+        pkl_paths=[test_data_path],
+        use_attr=True,
+        no_img=False,
+        batch_size=64,
+        uncertain_label=False,
+        n_class_attr=2,
+        image_dir=str(chexpert_location / "images"),
+        resampling=False,
+        root_dir=str(DATASET_ROOT),
+        num_workers=num_workers,
+        path_transform=None
+    )
+
+    return train_dl, valid_dl, test_dl
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generate CEM Concept Vectors')
     parser.add_argument('--experiment_name', type=str,
@@ -346,6 +401,10 @@ if __name__ == "__main__":
         train_dl, valid_dl, test_dl = generate_data_loaders_dsprites(suffix)
         n_concepts = 18
         n_tasks = 100
+    elif experiment_name == "chexpert":
+        train_dl, valid_dl, test_dl = generate_data_loaders_chexpert(suffix)
+        n_concepts = 13
+        n_tasks = 2
     else:
         print("{} is not a valid experiment name".format(experiment_name))
 
@@ -387,6 +446,9 @@ if __name__ == "__main__":
         train_data_path = str(DATASET_ROOT / "colored_mnist" / "preprocessed" / "train.pkl")
         imbalance = find_class_imbalance(train_data_path, True)
     elif experiment_name == 'dsprites':
+        extractor_arch = "resnet34"
+        imbalance = None
+    elif experiment_name == 'chexpert':
         extractor_arch = "resnet34"
         imbalance = None
         

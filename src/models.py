@@ -43,6 +43,25 @@ class VAE(keras.Model):
         self.kl_loss_tracker = keras.metrics.Mean(name="kl_loss")
         self.concept_loss_tracker = keras.metrics.Mean(name="concept_loss")
 
+    def call(self, data):
+        z_mean, z_log_var, z = self.encoder(data)
+        return self.decoder(z)
+
+    def test_step(self, data):
+        if self.concept_alignment:
+            data = data[0][0]
+        reconstruction = self(data, training=False)
+        reconstruction_loss = tf.reduce_mean(
+            tf.reduce_sum(
+                keras.losses.binary_crossentropy(data, reconstruction), axis=(1,2)
+            )
+        )
+        z_mean, z_log_var, z = self.encoder(data)
+        kl_loss = -0.5 * (1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
+        kl_loss = tf.reduce_mean(tf.reduce_sum(kl_loss, axis=1))
+        total_loss = reconstruction_loss + kl_loss
+        return {"loss": total_loss}
+
     @property
     def metrics(self):
         return [
@@ -252,7 +271,8 @@ def train_VAE(dataset,suffix,seed,save_location="", latent_dim=2,epochs=30,conce
         vae.fit([train_images,train_concepts], epochs=epochs, batch_size=128,
                 validation_data=([val_images,val_concepts], None))
     else:
-        vae.fit(train_images,epochs=epochs,batch_size=128,validation_data=val_images)
+        vae.fit(train_images, epochs=epochs, batch_size=128,
+                validation_data=(val_images, None))
     
     if save_location != "":
         output_path = RESULTS_ROOT / "models" / save_location

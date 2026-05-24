@@ -349,7 +349,7 @@ def flat_distance_to_square(distance_matrix):
     return new_distances
 
 
-def get_concept_distances(embedding_method,dataset,suffix,attributes,random_seed,metric='euclidean'):
+def get_concept_distances(embedding_method,dataset,suffix,attributes,random_seed,metric='euclidean',aggregation='mean'):
     """Compute a numpy distance matrix between every pair of concepts
     
     Arguments:
@@ -359,6 +359,11 @@ def get_concept_distances(embedding_method,dataset,suffix,attributes,random_seed
         suffix: String, which specific instance of the dataset we're using 
         attributes: List of attributes we want to create embeddings for
         random_seed: Number representing the random seed for the embeddings
+        metric: Distance metric (default: 'euclidean')
+        aggregation: How to aggregate pairwise distances between vector sets.
+            'mean' (default) - average of all pairwise distances (centroid approach)
+            'min' - minimum distance (max similarity / best alignment)
+            'median' - median of all pairwise distances (robust centroid)
         
     Returns: Numpy distance matrix
 
@@ -378,14 +383,19 @@ def get_concept_distances(embedding_method,dataset,suffix,attributes,random_seed
             embeddings_j = embeddings_by_attribute[attributes[j]]
             
             all_pairwise_distances = sklearn.metrics.pairwise_distances(embeddings_i,embeddings_j,metric=metric)
-            distance = np.mean(all_pairwise_distances)
+            if aggregation == 'min':
+                distance = np.min(all_pairwise_distances)
+            elif aggregation == 'median':
+                distance = np.median(all_pairwise_distances)
+            else:
+                distance = np.mean(all_pairwise_distances)
             distance_matrix.append(distance)
     
     distance_matrix = np.array(distance_matrix)
     
     return distance_matrix
 
-def create_hierarchy(hierarchy_method, embedding_method,dataset,suffix,attributes,random_seed,metric='euclidean'):
+def create_hierarchy(hierarchy_method, embedding_method,dataset,suffix,attributes,random_seed,metric='euclidean',aggregation='mean'):
     """Create a hierarchy from a set of embeddings and a dataset
     Do this by first creating a distance matrix (pdist-style), then feeding it into hierarchy_method
     
@@ -402,7 +412,7 @@ def create_hierarchy(hierarchy_method, embedding_method,dataset,suffix,attribute
         Hierarchy from the Hierarchy class
     """
     
-    distance_matrix = get_concept_distances(embedding_method,dataset,suffix,attributes,random_seed,metric=metric)    
+    distance_matrix = get_concept_distances(embedding_method,dataset,suffix,attributes,random_seed,metric=metric,aggregation=aggregation)    
     dendrogram = hierarchy_method(distance_matrix)
     h = Hierarchy()
     h.from_array(dendrogram,attributes)

@@ -12,6 +12,7 @@ import time
 import pandas as pd
 from src.create_vectors import get_activations_dictionary
 from src.paths import DATASET_ROOT, RESULTS_ROOT, INTERMEDIARY_ROOT, ensure_dir
+from sklearn.metrics import silhouette_score
 
 def get_top_k_pairs(embedding,k=3):
     pairs = []
@@ -461,6 +462,74 @@ def compute_all_metrics(embedding_method,dataset,attributes,random_seeds,model="
         results[name] = score
         
     return results
+
+def max_similarity_metric(embedding_method, dataset, attributes, random_seeds):
+    """
+    Evaluate concept quality using max-similarity (best-pair alignment) instead of
+    centroid averaging. For each concept pair, finds the minimum pairwise distance
+    (equivalent to maximum cosine similarity) across all vector pairs.
+
+    Uses aggregation='min' in get_concept_distances to compute pairwise distances,
+    then evaluates the resulting hierarchy via embedding_distance.
+
+    Returns:
+        (mean_stability, std_stability) across seeds.
+    """
+    baseline_embeddings = [
+        flat_distance_to_square(
+            get_concept_distances(
+                embedding_method, dataset, "", attributes, seed,
+                metric='cosine', aggregation='min'
+            )
+        )
+        for seed in random_seeds
+    ]
+    stability_list = []
+    for h1, h2 in itertools.combinations(baseline_embeddings, r=2):
+        k = 3
+        if dataset.experiment_name == 'mnist':
+            k = 1
+        distance = embedding_distance(h1, h2, k=k)
+        stability_list.append(distance)
+    return np.mean(stability_list), np.std(stability_list)
+
+
+def concept_purity_metric(embedding_method, dataset, attributes, random_seeds):
+    """
+    Measure concept purity using silhouette score across individual concept vectors.
+
+    For each seed, loads all per-concept vectors (NOT averaged), labels each vector
+    by its attribute index, and computes the silhouette score using cosine distance.
+    Higher silhouette = better concept separation = purer concepts.
+
+    Skips methods that return only 1 vector per concept (e.g., Label, Concept2Vec)
+    since silhouette requires >=2 samples per cluster.
+
+    Returns:
+        (mean_silhouette, std_silhouette) across seeds, or (nan, nan) if inapplicable.
+    """
+    scores = []
+    for seed in random_seeds:
+        all_vectors = []
+        all_labels = []
+        for i, attr in enumerate(attributes):
+            vectors = embedding_method(attr, dataset, "", seed)
+            if len(vectors) == 0:
+                continue
+            all_vectors.append(vectors)
+            all_labels.extend([i] * len(vectors))
+        if len(all_vectors) < 2:
+            return float('nan'), float('nan')
+        all_vectors = np.vstack(all_vectors)
+        n_labels = len(set(all_labels))
+        if all_vectors.shape[0] <= n_labels + 1:
+            return float('nan'), float('nan')
+        try:
+            score = silhouette_score(all_vectors, all_labels, metric='cosine')
+        except Exception:
+            return float('nan'), float('nan')
+        scores.append(score)
+    return np.mean(scores), np.std(scores)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Evaluate a concept generation method')
