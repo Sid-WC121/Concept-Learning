@@ -6,6 +6,8 @@ This paper was done by [Naveen Raman](https://naveenraman.com/), [Mateo Espinosa
 
 Paper link: [https://arxiv.org/abs/2405.18217](https://arxiv.org/abs/2405.18217)
 
+Reproducibility challenge implementation done by [Sidharth Padmanabhan](https://sid-wc121.github.io/), [Laura Jimena Tagle Muñoz](https://github.com/jimenatagle), Qinyou Wang, [Fabian Bosshard](https://fabianbosshard.github.io/)
+
 Our Report: [BAIC Report](https://github.com/Sid-WC121/Concept-Learning/blob/main/BAIC%20Report.pdf)
 
 #### TL;DR
