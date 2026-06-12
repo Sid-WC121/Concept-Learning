@@ -1,12 +1,12 @@
 # Understanding Inter-Concept Relationships in Concept-Based Models
 
-![Concept Hierarchies](img/pull_figure.png)
+This repository contains the reproducibility challenge implementation for the paper "Understanding Inter-Concept Relationships in Concept-Based Models", published at ICML 2024.
 
-This repository contains the implementation for the thesis "Understanding Inter-Concept Relationships in Concept-Based Models", published at ICML 2024.
-
-This work was done by [Naveen Raman](https://naveenraman.com/), [Mateo Espinosa](https://hairyballtheorem.com/), and [Mateja Jamnik](https://www.cl.cam.ac.uk/~mj201/). 
+This paper was done by [Naveen Raman](https://naveenraman.com/), [Mateo Espinosa](https://hairyballtheorem.com/), and [Mateja Jamnik](https://www.cl.cam.ac.uk/~mj201/). 
 
 Paper link: [https://arxiv.org/abs/2405.18217](https://arxiv.org/abs/2405.18217)
+
+Our Report: [BAIC Report](https://github.com/Sid-WC121/Concept-Learning/blob/main/BAIC%20Report.pdf)
 
 #### TL;DR
 We construct concept bases, a way to study inter relationships in concept models. This allows us to understand the types of inter-concept relationships captured by existing concept-based models. Additionally, well-constructed concept bases can assist with downstream applications such as concept intervention. 
@@ -15,8 +15,6 @@ We provide code here to perform the following operations:
 1. Extract concept bases and concept vectors
 2. Evaluate concept bases
 3. Employ concept bases for concept intervention
-
-We provide the bulk of the code in this repository. However, to run concept interventions, we provide information in the scripts/cem_scripts folder. 
 
 ## Reproduction Runbook
 
